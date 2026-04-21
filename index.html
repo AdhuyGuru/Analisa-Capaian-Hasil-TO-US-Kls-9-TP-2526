@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informatika Progress Tracker - Grade 9</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .card-shadow { box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 transition-colors duration-300">
+    <div id="app" class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16 items-center">
+                    <div class="flex items-center gap-2">
+                        <div class="p-2 bg-indigo-600 rounded-lg">
+                            <i class="fas fa-chart-line text-white"></i>
+                        </div>
+                        <span class="text-xl font-bold tracking-tight text-gray-900">InfoTrack <span class="text-indigo-600">9</span></span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span id="lastUpdated" class="text-xs text-gray-500 hidden sm:block"></span>
+                        <button onclick="fetchData()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            <!-- Filters -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="relative">
+                    <label class="text-xs font-semibold uppercase text-gray-500 mb-1 block">Filter Kelas</label>
+                    <select id="classFilter" onchange="applyFilters()" class="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 appearance-none focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <option value="all">Seluruh Kelas</option>
+                        <option value="9A1">Kelas 9A1</option>
+                        <option value="9A2">Kelas 9A2</option>
+                        <option value="9B1">Kelas 9B1</option>
+                        <option value="9B2">Kelas 9B2</option>
+                    </select>
+                </div>
+                <div class="relative md:col-span-2">
+                    <label class="text-xs font-semibold uppercase text-gray-500 mb-1 block">Cari Siswa</label>
+                    <div class="relative">
+                        <input type="text" id="nameSearch" oninput="applyFilters()" placeholder="Masukkan nama siswa..." class="w-full bg-white border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <i class="fas fa-search absolute left-3 top-4 text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Overview -->
+            <div id="statsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <p class="text-sm text-gray-500 font-medium">Rata-rata Sekolah</p>
+                    <h3 id="avgSchool" class="text-3xl font-bold text-gray-900 mt-1">--</h3>
+                    <div class="mt-2 text-xs text-indigo-600 flex items-center">
+                        <i class="fas fa-info-circle mr-1"></i> Target KKM: 76
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <p class="text-sm text-gray-500 font-medium">Siswa Tuntas</p>
+                    <h3 id="passRate" class="text-3xl font-bold text-gray-900 mt-1">--%</h3>
+                    <p class="text-xs text-gray-400 mt-2">Berdasarkan Rata-rata Aktif</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <p class="text-sm text-gray-500 font-medium">Best Performing Class</p>
+                    <h3 id="bestClass" class="text-3xl font-bold text-green-600 mt-1">--</h3>
+                    <p class="text-xs text-gray-400 mt-2">Berdasarkan TO Terbaru</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <p class="text-sm text-gray-500 font-medium">Total Partisipan</p>
+                    <h3 id="totalStudents" class="text-3xl font-bold text-gray-900 mt-1">--</h3>
+                    <p class="text-xs text-gray-400 mt-2">Daftar Analisa Reguler</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <!-- Achievement Range Chart -->
+                <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <div class="flex justify-between items-start mb-4">
+                        <h2 class="text-lg font-bold">Distribusi Peringkat</h2>
+                        <select id="rangeTOSelector" onchange="renderRangeChart()" class="text-xs border-none bg-gray-100 rounded-lg px-2 py-1 outline-none">
+                            <option value="avg">Rata-rata</option>
+                            <option value="0">TO 1</option>
+                            <option value="1">TO 2</option>
+                            <option value="2">TO 3</option>
+                            <option value="3">TO 4</option>
+                        </select>
+                    </div>
+                    <div class="h-64 flex items-center justify-center">
+                        <canvas id="rangeChart"></canvas>
+                    </div>
+                    <div class="mt-4 space-y-2 border-t pt-4">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <div class="flex items-center gap-2 font-medium text-emerald-600">
+                                <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                                Sangat Baik (A)
+                            </div>
+                            <span class="text-gray-400 font-mono">92 - 100</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px]">
+                            <div class="flex items-center gap-2 font-medium text-blue-600">
+                                <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                                Baik (B)
+                            </div>
+                            <span class="text-gray-400 font-mono">84 - 91</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px]">
+                            <div class="flex items-center gap-2 font-medium text-amber-600">
+                                <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                                Cukup (C)
+                            </div>
+                            <span class="text-gray-400 font-mono">76 - 83</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px]">
+                            <div class="flex items-center gap-2 font-medium text-rose-600">
+                                <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                                Perlu Bimbingan (D)
+                            </div>
+                            <span class="text-gray-400 font-mono">&lt; 76</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Collective Analysis Bar Chart -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-bold">Tingkat Kelulusan per Sesi (%)</h2>
+                        <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded italic">*TO 0% diabaikan dalam analisa</span>
+                    </div>
+                    <div class="h-[340px]">
+                        <canvas id="collectiveChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison Per Class -->
+            <div class="mb-8">
+                <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-bold">Komparasi Distribusi Nilai Per Kelas</h2>
+                        <span class="text-xs text-gray-400 uppercase tracking-widest font-bold">Berdasarkan Rata-rata Aktif</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm font-bold text-gray-600 mb-2">Kelas 9A1</span>
+                            <div class="h-40 w-40"><canvas id="chart9A1"></canvas></div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm font-bold text-gray-600 mb-2">Kelas 9A2</span>
+                            <div class="h-40 w-40"><canvas id="chart9A2"></canvas></div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm font-bold text-gray-600 mb-2">Kelas 9B1</span>
+                            <div class="h-40 w-40"><canvas id="chart9B1"></canvas></div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm font-bold text-gray-600 mb-2">Kelas 9B2</span>
+                            <div class="h-40 w-40"><canvas id="chart9B2"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Insight Section -->
+            <div class="mb-8">
+                <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-white relative overflow-hidden border border-slate-700">
+                    <div class="relative z-10 grid grid-cols-1 md:grid-cols-4 gap-8 items-center">
+                        <div class="md:col-span-1 border-r border-slate-700 pr-4">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="p-2 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/50">
+                                    <i class="fas fa-brain text-white"></i>
+                                </div>
+                                <h2 class="text-xl font-bold">AI Analyst</h2>
+                            </div>
+                            <p class="text-xs text-slate-400">Analisa cerdas berdasarkan data yang sudah divalidasi.</p>
+                        </div>
+                        <div class="md:col-span-2">
+                            <div id="aiLoading" class="hidden space-y-3">
+                                <div class="h-3 bg-slate-700 rounded w-full animate-pulse"></div>
+                                <div class="h-3 bg-slate-700 rounded w-4/5 animate-pulse"></div>
+                                <div class="h-3 bg-slate-700 rounded w-3/5 animate-pulse"></div>
+                            </div>
+                            <div id="aiInsight" class="text-base leading-relaxed text-slate-200 italic font-light custom-scrollbar">
+                                "Klik tombol 'Buat Analisa' untuk melihat kesimpulan progres yang akurat."
+                            </div>
+                        </div>
+                        <div class="md:col-span-1 text-center md:text-right">
+                            <button onclick="getAIAdvice()" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-500 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-600/30">
+                                <i class="fas fa-wand-magic-sparkles mr-2"></i> Buat Analisa
+                            </button>
+                        </div>
+                    </div>
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[100px] rounded-full"></div>
+                </div>
+            </div>
+
+            <!-- Individual Analysis -->
+            <div id="individualSection" class="hidden mb-8">
+                 <div class="bg-white p-6 rounded-2xl card-shadow border border-gray-100">
+                    <h2 class="text-lg font-bold mb-6" id="studentDetailTitle">Trend Nilai Siswa</h2>
+                    <div class="h-64">
+                        <canvas id="individualChart"></canvas>
+                    </div>
+                 </div>
+            </div>
+
+            <!-- Table Data -->
+            <div class="bg-white rounded-2xl card-shadow border border-gray-100 overflow-hidden">
+                <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <h2 class="text-lg font-bold text-gray-800">Laporan Hasil Belajar (Daftar Siswa Reguler)</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-xs uppercase text-gray-400 bg-white">
+                                <th class="px-6 py-4 font-semibold">Nama Siswa</th>
+                                <th class="px-6 py-4 font-semibold">Kelas</th>
+                                <th class="px-6 py-4 font-semibold text-center">TO 1</th>
+                                <th class="px-6 py-4 font-semibold text-center">TO 2</th>
+                                <th class="px-6 py-4 font-semibold text-center">TO 3</th>
+                                <th class="px-6 py-4 font-semibold text-center">TO 4</th>
+                                <th class="px-6 py-4 font-semibold text-center">Rata-rata*</th>
+                                <th class="px-6 py-4 font-semibold text-center">Predikat</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentTableBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div class="p-4 bg-gray-50 text-[10px] text-gray-400 text-center uppercase tracking-widest font-semibold">
+                    *M. Rafky Raffasya & Rizky Aditya S. tidak dimasukkan dalam analisa reguler karena perbedaan instrumen evaluasi.
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loader" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
+            <div class="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+            <p class="text-indigo-600 font-medium">Memuat Data Informatika...</p>
+        </div>
+    </div>
+
+    <script>
+        Chart.register(ChartDataLabels);
+
+        const API_KEY = ""; 
+        const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1DherhaY_RmvkgvmZry6goCRJ4L2qQD-IqcPU9iyiCws/gviz/tq?tqx=out:csv&sheet=INF';
+        const KKM = 76;
+        
+        // Daftar nama yang akan dikecualikan
+        const EXCLUDED_STUDENTS = [
+            "MUHAMMAD RAFKY RAFFASYA",
+            "RIZKY ADITYA SUGANDA"
+        ];
+
+        let masterData = [];
+        let filteredData = [];
+        let collectiveChart = null, individualChart = null, rangeChart = null;
+        let classCharts = {};
+
+        window.onload = () => { fetchData(); };
+
+        async function fetchData() {
+            document.getElementById('loader').style.display = 'flex';
+            try {
+                const response = await fetch(SPREADSHEET_URL);
+                const csvData = await response.text();
+                masterData = parseCSV(csvData);
+                filteredData = [...masterData];
+                updateUI();
+                document.getElementById('lastUpdated').innerText = `Sync: ${new Date().toLocaleTimeString()}`;
+            } catch (error) { console.error('Error:', error); }
+            finally {
+                setTimeout(() => {
+                    document.getElementById('loader').style.opacity = '0';
+                    setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
+                }, 800);
+            }
+        }
+
+        function parseCSV(csv) {
+            const lines = csv.split('\n');
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                if (row.length < 8) continue;
+                const clean = (val) => val ? val.replace(/"/g, '').trim() : "0";
+                
+                const studentName = clean(row[0]);
+                
+                // FILTER: Cek apakah nama siswa ada dalam daftar pengecualian
+                if (EXCLUDED_STUDENTS.includes(studentName.toUpperCase())) {
+                    continue; 
+                }
+
+                data.push({
+                    name: studentName,
+                    className: clean(row[1]),
+                    scores: [
+                        parseFloat(clean(row[4])) || 0,
+                        parseFloat(clean(row[5])) || 0,
+                        parseFloat(clean(row[6])) || 0,
+                        parseFloat(clean(row[7])) || 0
+                    ]
+                });
+            }
+            return data;
+        }
+
+        function calculateActiveAvg(scores) {
+            const activeScores = scores.filter(s => s > 0);
+            if (activeScores.length === 0) return 0;
+            return activeScores.reduce((a, b) => a + b, 0) / activeScores.length;
+        }
+
+        function getGrade(score) {
+            if (score <= 0) return { text: 'Belum Ujian', char: '-', color: 'text-gray-400', bg: 'bg-gray-100', hex: '#94a3b8' };
+            if (score >= 92) return { text: 'Sangat Baik', char: 'A', color: 'text-emerald-600', bg: 'bg-emerald-100', hex: '#10b981' };
+            if (score >= 84) return { text: 'Baik', char: 'B', color: 'text-blue-600', bg: 'bg-blue-100', hex: '#3b82f6' };
+            if (score >= 76) return { text: 'Cukup', char: 'C', color: 'text-amber-600', bg: 'bg-amber-100', hex: '#f59e0b' };
+            return { text: 'Perlu Bimbingan', char: 'D', color: 'text-rose-600', bg: 'bg-rose-100', hex: '#f43f5e' };
+        }
+
+        function applyFilters() {
+            const classFilter = document.getElementById('classFilter').value;
+            const searchName = document.getElementById('nameSearch').value.toLowerCase();
+            filteredData = masterData.filter(student => {
+                const matchClass = classFilter === 'all' || student.className === classFilter;
+                const matchName = student.name.toLowerCase().includes(searchName);
+                return matchClass && matchName;
+            });
+            updateUI();
+        }
+
+        function updateUI() {
+            renderTable();
+            updateStats();
+            renderCollectiveChart();
+            renderRangeChart();
+            renderClassComparisonCharts();
+            const searchInput = document.getElementById('nameSearch').value;
+            const individualSection = document.getElementById('individualSection');
+            if (filteredData.length > 0 && filteredData.length < 5 && searchInput.length > 2) {
+                individualSection.classList.remove('hidden');
+                renderIndividualChart(filteredData[0]);
+                document.getElementById('studentDetailTitle').innerText = `Grafik Trend: ${filteredData[0].name}`;
+            } else { individualSection.classList.add('hidden'); }
+        }
+
+        function updateStats() {
+            if (filteredData.length === 0) return;
+            let totalAvg = 0, count = 0;
+            filteredData.forEach(s => {
+                const avg = calculateActiveAvg(s.scores);
+                if (avg > 0) { totalAvg += avg; count++; }
+            });
+            document.getElementById('avgSchool').innerText = count > 0 ? (totalAvg / count).toFixed(1) : "0";
+            const passed = filteredData.filter(s => calculateActiveAvg(s.scores) >= KKM).length;
+            document.getElementById('passRate').innerText = `${((passed / filteredData.length) * 100).toFixed(0)}%`;
+            document.getElementById('totalStudents').innerText = filteredData.length;
+        }
+
+        function getDistributionData(dataList, mode) {
+            const counts = { 'A': 0, 'B': 0, 'C': 0, 'D': 0 };
+            dataList.forEach(s => {
+                let scoreToEvaluate;
+                if (mode === 'avg') {
+                    scoreToEvaluate = calculateActiveAvg(s.scores);
+                } else {
+                    scoreToEvaluate = s.scores[parseInt(mode)];
+                }
+                const grade = getGrade(scoreToEvaluate);
+                if (counts[grade.char] !== undefined) counts[grade.char]++;
+            });
+            return [counts['A'], counts['B'], counts['C'], counts['D']];
+        }
+
+        function renderRangeChart() {
+            const ctx = document.getElementById('rangeChart').getContext('2d');
+            const mode = document.getElementById('rangeTOSelector').value;
+            const distribution = getDistributionData(filteredData, mode);
+
+            if (rangeChart) rangeChart.destroy();
+            rangeChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Sangat Baik', 'Baik', 'Cukup', 'Perlu Bimbingan'],
+                    datasets: [{
+                        data: distribution,
+                        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            formatter: (value, ctx) => {
+                                let sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                if (sum === 0) return '';
+                                return value > 0 ? (value * 100 / sum).toFixed(0) + "%" : '';
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold', size: 10 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderClassComparisonCharts() {
+            const classes = ['9A1', '9A2', '9B1', '9B2'];
+            classes.forEach(cls => {
+                const classData = masterData.filter(s => s.className === cls);
+                const distribution = getDistributionData(classData, 'avg');
+                const canvas = document.getElementById(`chart${cls}`);
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                
+                if (classCharts[cls]) classCharts[cls].destroy();
+                classCharts[cls] = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['A', 'B', 'C', 'D'],
+                        datasets: [{
+                            data: distribution,
+                            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e'],
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                color: '#fff',
+                                font: { size: 9, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    let sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                    return val > 0 ? ctx.chart.data.labels[ctx.dataIndex] : '';
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        function renderCollectiveChart() {
+            const ctx = document.getElementById('collectiveChart').getContext('2d');
+            const classes = ['9A1', '9A2', '9B1', '9B2'];
+            const dataPerTO = [0, 1, 2, 3].map(toIdx => {
+                return classes.map(c => {
+                    const cS = masterData.filter(s => s.className === c);
+                    if (cS.length === 0) return 0;
+                    const passed = cS.filter(s => s.scores[toIdx] >= KKM).length;
+                    return parseFloat(((passed / cS.length) * 100).toFixed(1));
+                });
+            });
+            if (collectiveChart) collectiveChart.destroy();
+            collectiveChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: classes,
+                    datasets: [
+                        { label: 'TO 1', data: dataPerTO[0], backgroundColor: '#FB7185' },
+                        { label: 'TO 2', data: dataPerTO[1], backgroundColor: '#FB923C' },
+                        { label: 'TO 3', data: dataPerTO[2], backgroundColor: '#22D3EE' },
+                        { label: 'TO 4', data: dataPerTO[3], backgroundColor: '#818CF8' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 8, font: { size: 10 } } },
+                        datalabels: { anchor: 'end', align: 'top', formatter: (val) => val > 0 ? val + '%' : '', font: { size: 9, weight: 'bold' } }
+                    },
+                    scales: { y: { display: false, max: 120 }, x: { grid: { display: false } } }
+                }
+            });
+        }
+
+        function renderIndividualChart(student) {
+            const ctx = document.getElementById('individualChart').getContext('2d');
+            if (individualChart) individualChart.destroy();
+            individualChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['TO 1', 'TO 2', 'TO 3', 'TO 4'],
+                    datasets: [{
+                        label: 'Nilai',
+                        data: student.scores.map(s => s === 0 ? null : s),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 6,
+                        pointBackgroundColor: '#6366f1',
+                        datalabels: { align: 'top' }
+                    }, {
+                        label: 'KKM', data: [76, 76, 76, 76], borderColor: '#f43f5e', borderDash: [5, 5], pointRadius: 0, fill: false
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: { y: { min: 0, max: 100 } }
+                }
+            });
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('studentTableBody');
+            tbody.innerHTML = '';
+            filteredData.forEach(student => {
+                const avg = calculateActiveAvg(student.scores).toFixed(1);
+                const grade = getGrade(parseFloat(avg));
+                const row = document.createElement('tr');
+                row.className = "hover:bg-gray-50 transition-colors";
+                let scoreCells = '';
+                student.scores.forEach(s => {
+                    scoreCells += `<td class="px-6 py-4 text-center ${s >= KKM ? 'text-emerald-600 font-bold' : (s > 0 ? 'text-rose-500' : 'text-gray-300')}">${s > 0 ? s : '-'}</td>`;
+                });
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-gray-900">${student.name}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${student.className}</td>
+                    ${scoreCells}
+                    <td class="px-6 py-4 text-center font-bold text-gray-700">${avg > 0 ? avg : '-'}</td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="px-3 py-1 rounded-full text-[10px] font-bold ${grade.bg} ${grade.color}">${grade.text}</span>
+                    </td>`;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function getAIAdvice() {
+            const insightBox = document.getElementById('aiInsight');
+            const loader = document.getElementById('aiLoading');
+            insightBox.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            const validStudents = masterData.filter(s => calculateActiveAvg(s.scores) > 0);
+            const avgSekolah = (validStudents.reduce((acc, s) => acc + calculateActiveAvg(s.scores), 0) / (validStudents.length || 1)).toFixed(1);
+            
+            const toStats = [0,1,2,3].map(i => {
+                const totalInTO = masterData.filter(s => s.scores[i] > 0).length;
+                if (totalInTO === 0) return { id: i+1, percentage: 0 };
+                const countPassed = masterData.filter(s => s.scores[i] >= KKM).length;
+                return { id: i+1, percentage: parseFloat(((countPassed/totalInTO)*100).toFixed(1)) };
+            });
+
+            const activeTO = toStats.filter(t => t.percentage > 0);
+            const activeTODataString = activeTO.map(t => `TO${t.id}: ${t.percentage}%`).join(', ');
+
+            const prompt = `Analisa hasil Tryout Informatika Siswa Reguler (Abaikan Muhammad Rafky Raffasya dan Rizky Aditya Suganda).
+            - Rata-rata Sekolah saat ini: ${avgSekolah}
+            - Data Kelulusan TO Aktif: ${activeTODataString}
+            Buat 3 kalimat kesimpulan singkat tentang tren kelas reguler. Bahasa Indonesia formal.`;
+
+            try {
+                let retries = 0, resultText = "";
+                while (retries < 5) {
+                    try {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: prompt }] }],
+                                systemInstruction: { parts: [{ text: "Anda adalah analis data pendidikan yang akurat." }] }
+                            })
+                        });
+                        if (!response.ok) throw new Error();
+                        const result = await response.json();
+                        resultText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        break;
+                    } catch (e) {
+                        retries++;
+                        await new Promise(r => setTimeout(r, Math.pow(2, retries) * 1000));
+                    }
+                }
+                insightBox.innerText = resultText || "Analisa Aktif Terkini: " + activeTODataString;
+            } catch (error) {
+                insightBox.innerText = "Ringkasan manual: Rata-rata sekolah reguler adalah " + avgSekolah + ".";
+            } finally {
+                loader.classList.add('hidden');
+                insightBox.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
